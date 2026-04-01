@@ -131,6 +131,10 @@ struct Cli {
     #[arg(long = "output-format", value_enum, default_value_t = CliOutputFormat::Text)]
     output_format: CliOutputFormat,
 
+    /// Include all hook lifecycle events in the output stream (only works with --output-format=stream-json)
+    #[arg(long = "include-hook-events", action = ArgAction::SetTrue)]
+    include_hook_events: bool,
+
     /// Enable verbose logging
     #[arg(long = "verbose", short = 'v', action = ArgAction::SetTrue)]
     verbose: bool,
@@ -596,6 +600,38 @@ async fn run_headless(
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<QueryEvent>();
     let cancel = CancellationToken::new();
 
+    if !tool_ctx.config.hooks.is_empty() {
+        let hook_ctx = cc_core::hooks::HookContext {
+            event: "UserPromptSubmit".to_string(),
+            tool_name: None,
+            tool_input: None,
+            tool_output: Some(prompt.clone()),
+            is_error: None,
+            session_id: Some(tool_ctx.session_id.clone()),
+        };
+        let hook_outcome = cc_core::hooks::run_hooks(
+            &tool_ctx.config.hooks,
+            cc_core::config::HookEvent::UserPromptSubmit,
+            &hook_ctx,
+            &tool_ctx.working_dir,
+        )
+        .await;
+        if cli.include_hook_events && is_stream_json {
+            let (outcome, details) = match hook_outcome {
+                cc_core::hooks::HookOutcome::Allowed => ("allowed", None),
+                cc_core::hooks::HookOutcome::Blocked(reason) => ("blocked", Some(reason)),
+                cc_core::hooks::HookOutcome::Modified(output) => ("modified", Some(output)),
+            };
+            let ev = serde_json::json!({
+                "type": "hook_event",
+                "event": "UserPromptSubmit",
+                "outcome": outcome,
+                "details": details,
+            });
+            println!("{}", ev);
+        }
+    }
+
     // Spawn the query loop in a background task so we can drain events concurrently
     let mut messages = vec![cc_core::types::Message::user(prompt)];
     let client_clone = client.clone();
@@ -655,6 +691,23 @@ async fn run_headless(
                     eprintln!("{}", ev);
                 } else {
                     eprintln!("\nError: {}", msg);
+                }
+            }
+            QueryEvent::Hook {
+                event_name,
+                tool_name,
+                outcome,
+                details,
+            } => {
+                if cli.include_hook_events && is_stream_json {
+                    let ev = serde_json::json!({
+                        "type": "hook_event",
+                        "event": event_name,
+                        "tool": tool_name,
+                        "outcome": outcome,
+                        "details": details,
+                    });
+                    println!("{}", ev);
                 }
             }
             _ => {}

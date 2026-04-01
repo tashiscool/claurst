@@ -1,0 +1,367 @@
+{
+  "artifacts": [
+    {
+      "codesign": {
+        "Authority": "Developer ID Application: Anthropic PBC (Q6L2SF6YDW); Developer ID Certification Authority; Apple Root CA",
+        "Identifier": "com.anthropic.claude-code",
+        "TeamIdentifier": "Q6L2SF6YDW",
+        "Timestamp": "Mar 28, 2026 at 9:58:18\u202fPM"
+      },
+      "embedded_flags": {
+        "--advisor": true,
+        "--agent-color": true,
+        "--agent-id": true,
+        "--agent-name": true,
+        "--channels": true,
+        "--dangerously-load-development-channels": true,
+        "--enable-auto-mode": true,
+        "--include-hook-events": false,
+        "--parent-session-id": true,
+        "--plan-mode-required": true,
+        "--team-name": true,
+        "--teammate-mode": true,
+        "--tmux": true,
+        "--worktree": true
+      },
+      "file_type": "/Users/tkhan/.local/share/claude/versions/2.1.87: Mach-O 64-bit executable arm64",
+      "implementation_markers": {
+        "Buddy": true,
+        "autoDream": true,
+        "claude-sonnet-4-6": true,
+        "claudeai-mcp": true,
+        "https://mcp-proxy.anthropic.com": true,
+        "tengu_ultraplan": true
+      },
+      "mtime": "2026-03-28T22:20:32.166473",
+      "path": "/Users/tkhan/.local/share/claude/versions/2.1.87",
+      "public_help_flags": [
+        "--add-dir",
+        "--agent",
+        "--agents",
+        "--allow-dangerously-skip-permissions",
+        "--allowed-tools",
+        "--allowedTools",
+        "--append-system-prompt",
+        "--bare",
+        "--betas",
+        "--brief",
+        "--chrome",
+        "--continue",
+        "--dangerously-skip-permissions",
+        "--debug",
+        "--debug-file",
+        "--disable-slash-commands",
+        "--disallowed-tools",
+        "--disallowedTools",
+        "--effort",
+        "--fallback-model",
+        "--file",
+        "--fork-session",
+        "--from-pr",
+        "--help",
+        "--ide",
+        "--include-partial-messages",
+        "--input-format",
+        "--json-schema",
+        "--max-budget-usd",
+        "--mcp-config",
+        "--mcp-debug",
+        "--model",
+        "--name",
+        "--no-chrome",
+        "--no-session-persistence",
+        "--output-format",
+        "--permission-mode",
+        "--plugin-dir",
+        "--print",
+        "--replay-user-messages",
+        "--resume",
+        "--session-id",
+        "--setting-sources",
+        "--settings",
+        "--strict-mcp-config",
+        "--system-prompt",
+        "--tmux",
+        "--tools",
+        "--verbose",
+        "--version",
+        "--worktree"
+      ],
+      "reported_version": "2.1.87 (Claude Code)",
+      "segments": {
+        "__BUN": {
+          "filesize": 124682240,
+          "vmsize": 124682240
+        },
+        "__DATA": {
+          "filesize": 196608,
+          "vmsize": 6094848
+        },
+        "__DATA_CONST": {
+          "filesize": 1474560,
+          "vmsize": 1474560
+        },
+        "__LINKEDIT": {
+          "filesize": 1767408,
+          "vmsize": 1769472
+        },
+        "__TEXT": {
+          "filesize": 68501504,
+          "vmsize": 68501504
+        }
+      },
+      "sha256": "80b51562db1a51bfb654aec1fea6a04106daa0bc1525d88c9c74741ff5d9469a",
+      "size_bytes": 196638704,
+      "source_map_markers": {
+        "BUN_FEATURE_FLAG_DISABLE_SOURCE_MAPS": true,
+        "sourceMappingURL": true,
+        "sourcemap.json": true,
+        "sourcesContent": true
+      },
+      "version": "2.1.87"
+    },
+    {
+      "codesign": {
+        "Authority": "Developer ID Application: Anthropic PBC (Q6L2SF6YDW); Developer ID Certification Authority; Apple Root CA",
+        "Identifier": "com.anthropic.claude-code",
+        "TeamIdentifier": "Q6L2SF6YDW",
+        "Timestamp": "Mar 30, 2026 at 6:20:05\u202fPM"
+      },
+      "embedded_flags": {
+        "--advisor": true,
+        "--agent-color": true,
+        "--agent-id": true,
+        "--agent-name": true,
+        "--channels": true,
+        "--dangerously-load-development-channels": true,
+        "--enable-auto-mode": true,
+        "--include-hook-events": true,
+        "--parent-session-id": true,
+        "--plan-mode-required": true,
+        "--team-name": true,
+        "--teammate-mode": true,
+        "--tmux": true,
+        "--worktree": true
+      },
+      "file_type": "/Users/tkhan/.local/share/claude/versions/2.1.88: Mach-O 64-bit executable arm64",
+      "implementation_markers": {
+        "Buddy": true,
+        "autoDream": true,
+        "claude-sonnet-4-6": true,
+        "claudeai-mcp": true,
+        "https://mcp-proxy.anthropic.com": true,
+        "tengu_ultraplan": true
+      },
+      "mtime": "2026-03-30T20:13:54.392806",
+      "path": "/Users/tkhan/.local/share/claude/versions/2.1.88",
+      "public_help_flags": [
+        "--add-dir",
+        "--agent",
+        "--agents",
+        "--allow-dangerously-skip-permissions",
+        "--allowed-tools",
+        "--allowedTools",
+        "--append-system-prompt",
+        "--bare",
+        "--betas",
+        "--brief",
+        "--chrome",
+        "--continue",
+        "--dangerously-skip-permissions",
+        "--debug",
+        "--debug-file",
+        "--disable-slash-commands",
+        "--disallowed-tools",
+        "--disallowedTools",
+        "--effort",
+        "--fallback-model",
+        "--file",
+        "--fork-session",
+        "--from-pr",
+        "--help",
+        "--ide",
+        "--include-hook-events",
+        "--include-partial-messages",
+        "--input-format",
+        "--json-schema",
+        "--max-budget-usd",
+        "--mcp-config",
+        "--mcp-debug",
+        "--model",
+        "--name",
+        "--no-chrome",
+        "--no-session-persistence",
+        "--output-format",
+        "--permission-mode",
+        "--plugin-dir",
+        "--print",
+        "--replay-user-messages",
+        "--resume",
+        "--session-id",
+        "--setting-sources",
+        "--settings",
+        "--strict-mcp-config",
+        "--system-prompt",
+        "--tmux",
+        "--tools",
+        "--verbose",
+        "--version",
+        "--worktree"
+      ],
+      "reported_version": "2.1.88 (Claude Code)",
+      "segments": {
+        "__BUN": {
+          "filesize": 124239872,
+          "vmsize": 124239872
+        },
+        "__DATA": {
+          "filesize": 196608,
+          "vmsize": 6094848
+        },
+        "__DATA_CONST": {
+          "filesize": 1474560,
+          "vmsize": 1474560
+        },
+        "__LINKEDIT": {
+          "filesize": 1763952,
+          "vmsize": 1769472
+        },
+        "__TEXT": {
+          "filesize": 68501504,
+          "vmsize": 68501504
+        }
+      },
+      "sha256": "fe0d191adb7b0d26badd1e303e95a63d62d526ca1fb5882f53644754e1e9fe95",
+      "size_bytes": 196192880,
+      "source_map_markers": {
+        "BUN_FEATURE_FLAG_DISABLE_SOURCE_MAPS": true,
+        "sourceMappingURL": true,
+        "sourcemap.json": true,
+        "sourcesContent": true
+      },
+      "version": "2.1.88"
+    },
+    {
+      "codesign": {
+        "Authority": "Developer ID Application: Anthropic PBC (Q6L2SF6YDW); Developer ID Certification Authority; Apple Root CA",
+        "Identifier": "com.anthropic.claude-code",
+        "TeamIdentifier": "Q6L2SF6YDW",
+        "Timestamp": "Mar 31, 2026 at 7:13:39\u202fPM"
+      },
+      "embedded_flags": {
+        "--advisor": true,
+        "--agent-color": true,
+        "--agent-id": true,
+        "--agent-name": true,
+        "--channels": true,
+        "--dangerously-load-development-channels": true,
+        "--enable-auto-mode": true,
+        "--include-hook-events": true,
+        "--parent-session-id": true,
+        "--plan-mode-required": true,
+        "--team-name": true,
+        "--teammate-mode": true,
+        "--tmux": true,
+        "--worktree": true
+      },
+      "file_type": "/Users/tkhan/.local/share/claude/versions/2.1.89: Mach-O 64-bit executable arm64",
+      "implementation_markers": {
+        "Buddy": true,
+        "autoDream": true,
+        "claude-sonnet-4-6": true,
+        "claudeai-mcp": true,
+        "https://mcp-proxy.anthropic.com": true,
+        "tengu_ultraplan": true
+      },
+      "mtime": "2026-03-31T21:11:38.938074",
+      "path": "/Users/tkhan/.local/share/claude/versions/2.1.89",
+      "public_help_flags": [
+        "--add-dir",
+        "--agent",
+        "--agents",
+        "--allow-dangerously-skip-permissions",
+        "--allowed-tools",
+        "--allowedTools",
+        "--append-system-prompt",
+        "--bare",
+        "--betas",
+        "--brief",
+        "--chrome",
+        "--continue",
+        "--dangerously-skip-permissions",
+        "--debug",
+        "--debug-file",
+        "--disable-slash-commands",
+        "--disallowed-tools",
+        "--disallowedTools",
+        "--effort",
+        "--fallback-model",
+        "--file",
+        "--fork-session",
+        "--from-pr",
+        "--help",
+        "--ide",
+        "--include-hook-events",
+        "--include-partial-messages",
+        "--input-format",
+        "--json-schema",
+        "--max-budget-usd",
+        "--mcp-config",
+        "--mcp-debug",
+        "--model",
+        "--name",
+        "--no-chrome",
+        "--no-session-persistence",
+        "--output-format",
+        "--permission-mode",
+        "--plugin-dir",
+        "--print",
+        "--replay-user-messages",
+        "--resume",
+        "--session-id",
+        "--setting-sources",
+        "--settings",
+        "--strict-mcp-config",
+        "--system-prompt",
+        "--tmux",
+        "--tools",
+        "--verbose",
+        "--version",
+        "--worktree"
+      ],
+      "reported_version": "2.1.89 (Claude Code)",
+      "segments": {
+        "__BUN": {
+          "filesize": 124928000,
+          "vmsize": 124928000
+        },
+        "__DATA": {
+          "filesize": 196608,
+          "vmsize": 6094848
+        },
+        "__DATA_CONST": {
+          "filesize": 1474560,
+          "vmsize": 1474560
+        },
+        "__LINKEDIT": {
+          "filesize": 1769328,
+          "vmsize": 1769472
+        },
+        "__TEXT": {
+          "filesize": 68501504,
+          "vmsize": 68501504
+        }
+      },
+      "sha256": "f903a5e53f845b1ac5566296b713193827665f28da16300fdca7539cb0669a7f",
+      "size_bytes": 196886384,
+      "source_map_markers": {
+        "BUN_FEATURE_FLAG_DISABLE_SOURCE_MAPS": true,
+        "sourceMappingURL": true,
+        "sourcemap.json": true,
+        "sourcesContent": true
+      },
+      "version": "2.1.89"
+    }
+  ],
+  "generated_at": "2026-04-01T17:54:42.498831Z"
+}

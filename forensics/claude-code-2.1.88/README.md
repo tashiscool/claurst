@@ -64,6 +64,19 @@ Or against a different path:
 ./verify-local-binary.sh /path/to/claude-code-binary
 ```
 
+## Compare Local Versions
+
+Generate a local diff report for `2.1.87`, `2.1.88`, and `2.1.89`:
+
+```bash
+./analyze_versions.py
+```
+
+This writes:
+
+- `reports/version-diff.json`
+- `reports/version-diff.md`
+
 ## Optional Private Archive
 
 If you want a private local copy inside this repo without committing the binary:
