@@ -160,7 +160,6 @@ pub struct App {
     pub cursor_pos: usize,
 
     // ---- New overlay / notification fields --------------------------------
-
     /// Full-screen help overlay (? / F1).
     pub help_overlay: HelpOverlay,
     /// Ctrl+R history search overlay.
@@ -181,7 +180,6 @@ pub struct App {
     pub remote_session_url: Option<String>,
 
     // ---- Settings / theme / privacy screens --------------------------------
-
     /// Full-screen tabbed settings screen (/config, /settings).
     pub settings_screen: SettingsScreen,
     /// Theme picker overlay (/theme).
@@ -940,9 +938,7 @@ impl App {
             QueryEvent::ToolStart { tool_name, tool_id } => {
                 self.is_streaming = true;
                 self.status_message = Some(format!("Running {}…", tool_name));
-                if let Some(existing) =
-                    self.tool_use_blocks.iter_mut().find(|b| b.id == tool_id)
-                {
+                if let Some(existing) = self.tool_use_blocks.iter_mut().find(|b| b.id == tool_id) {
                     existing.status = ToolStatus::Running;
                     existing.output_preview = None;
                 } else {
@@ -966,9 +962,7 @@ impl App {
                 } else {
                     result.clone()
                 };
-                if let Some(block) =
-                    self.tool_use_blocks.iter_mut().find(|b| b.id == tool_id)
-                {
+                if let Some(block) = self.tool_use_blocks.iter_mut().find(|b| b.id == tool_id) {
                     block.status = if is_error {
                         ToolStatus::Error
                     } else {
@@ -990,11 +984,28 @@ impl App {
                     let text = std::mem::take(&mut self.streaming_text);
                     self.messages.push(Message::assistant(text));
                 }
-                self.tool_use_blocks.retain(|b| b.status != ToolStatus::Running);
+                self.tool_use_blocks
+                    .retain(|b| b.status != ToolStatus::Running);
             }
 
             QueryEvent::Status(msg) => {
                 self.status_message = Some(msg);
+            }
+
+            QueryEvent::Hook {
+                event_name,
+                tool_name,
+                outcome,
+                details,
+            } => {
+                debug!(event_name, ?tool_name, outcome, ?details, "Hook event");
+                if outcome == "blocked" {
+                    let label = tool_name
+                        .map(|tool| format!("{} ({})", event_name, tool))
+                        .unwrap_or(event_name);
+                    let suffix = details.map(|msg| format!(": {}", msg)).unwrap_or_default();
+                    self.status_message = Some(format!("Hook blocked {}{}", label, suffix));
+                }
             }
 
             QueryEvent::Error(msg) => {

@@ -26,26 +26,26 @@ use std::io::{self, Stdout};
 
 /// Application state and main event loop.
 pub mod app;
-/// Input helpers: slash command parsing.
-pub mod input;
-/// All ratatui rendering logic.
-pub mod render;
+/// Bridge connection state and status badge.
+pub mod bridge_state;
 /// Permission dialogs and confirmation dialogs.
 pub mod dialogs;
+/// Input helpers: slash command parsing.
+pub mod input;
 /// Notification / banner system.
 pub mod notifications;
 /// Help overlay, history search, message selector, rewind flow.
 pub mod overlays;
-/// Bridge connection state and status badge.
-pub mod bridge_state;
 /// Plugin hint/recommendation UI.
 pub mod plugin_views;
+/// Privacy settings dialog.
+pub mod privacy_screen;
+/// All ratatui rendering logic.
+pub mod render;
 /// Full-screen tabbed settings interface.
 pub mod settings_screen;
 /// Theme picker overlay.
 pub mod theme_screen;
-/// Privacy settings dialog.
-pub mod privacy_screen;
 
 // ---------------------------------------------------------------------------
 // Public re-exports
@@ -84,10 +84,10 @@ pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io
 mod tests {
     use super::*;
     use app::{App, HistorySearch, ToolStatus, ToolUseBlock};
-    use dialogs::PermissionRequest;
     use cc_core::config::Config;
     use cc_core::cost::CostTracker;
     use cc_core::types::Role;
+    use dialogs::PermissionRequest;
 
     fn make_app() -> App {
         App::new(Config::default(), CostTracker::new())
@@ -354,6 +354,21 @@ mod tests {
         assert!(app.streaming_text.is_empty());
         assert_eq!(app.messages.len(), 1);
         assert_eq!(app.messages[0].get_all_text(), "partial response");
+    }
+
+    #[test]
+    fn test_handle_blocking_hook_event_sets_status() {
+        let mut app = make_app();
+        app.handle_query_event(cc_query::QueryEvent::Hook {
+            event_name: "PreToolUse".to_string(),
+            tool_name: Some("Bash".to_string()),
+            outcome: "blocked".to_string(),
+            details: Some("denied by policy".to_string()),
+        });
+        assert_eq!(
+            app.status_message.as_deref(),
+            Some("Hook blocked PreToolUse (Bash): denied by policy")
+        );
     }
 
     // ---- HistorySearch --------------------------------------------------

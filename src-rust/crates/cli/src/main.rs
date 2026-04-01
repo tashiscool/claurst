@@ -11,6 +11,8 @@
 mod oauth_flow;
 
 use anyhow::Context;
+use async_trait::async_trait;
+use cc_core::types::ToolDefinition;
 use cc_core::{
     config::{Config, PermissionMode, Settings},
     constants::{APP_VERSION, DEFAULT_MODEL},
@@ -18,8 +20,6 @@ use cc_core::{
     cost::CostTracker,
     permissions::{AutoPermissionHandler, InteractivePermissionHandler},
 };
-use async_trait::async_trait;
-use cc_core::types::ToolDefinition;
 use cc_tools::{PermissionLevel, Tool, ToolContext, ToolResult};
 use clap::{ArgAction, Parser, ValueEnum};
 use std::{path::PathBuf, sync::Arc};
@@ -131,7 +131,7 @@ struct Cli {
     #[arg(long = "output-format", value_enum, default_value_t = CliOutputFormat::Text)]
     output_format: CliOutputFormat,
 
-    /// Include all hook lifecycle events in the output stream (only works with --output-format=stream-json)
+    /// Include all hook lifecycle events in the output stream (only works with --print and --output-format=stream-json)
     #[arg(long = "include-hook-events", action = ArgAction::SetTrue)]
     include_hook_events: bool,
 
@@ -228,6 +228,17 @@ fn resolve_bridge_config(
     bridge_config.is_active().then_some(bridge_config)
 }
 
+fn apply_user_prompt_submit_hook(
+    prompt: String,
+    hook_outcome: cc_core::hooks::HookOutcome,
+) -> anyhow::Result<String> {
+    match hook_outcome {
+        cc_core::hooks::HookOutcome::Allowed => Ok(prompt),
+        cc_core::hooks::HookOutcome::Modified(output) => Ok(output),
+        cc_core::hooks::HookOutcome::Blocked(reason) => anyhow::bail!(reason),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -288,13 +299,21 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let cli = Cli::parse();
+    let is_headless = cli.print || cli.prompt.is_some();
+
+    if cli.include_hook_events
+        && (!is_headless || !matches!(cli.output_format, CliOutputFormat::StreamJson))
+    {
+        anyhow::bail!(
+            "--include-hook-events only works with --print and --output-format=stream-json"
+        );
+    }
 
     // Setup logging
     let log_level = if cli.verbose { "debug" } else { "warn" };
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new(log_level)),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level)),
         )
         .with_target(false)
         .without_time()
@@ -341,8 +360,7 @@ async fn main() -> anyhow::Result<()> {
 
     // --dump-system-prompt fast path
     if cli.dump_system_prompt {
-        let ctx = ContextBuilder::new(cwd.clone())
-            .disable_claude_mds(config.disable_claude_mds);
+        let ctx = ContextBuilder::new(cwd.clone()).disable_claude_mds(config.disable_claude_mds);
         let sys = ctx.build_system_context().await;
         let user = ctx.build_user_context().await;
         println!("{}\n\n{}", sys, user);
@@ -350,8 +368,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Build context
-    let ctx_builder = ContextBuilder::new(cwd.clone())
-        .disable_claude_mds(config.disable_claude_mds);
+    let ctx_builder =
+        ContextBuilder::new(cwd.clone()).disable_claude_mds(config.disable_claude_mds);
     let system_ctx = ctx_builder.build_system_context().await;
     let user_ctx = ctx_builder.build_user_context().await;
 
@@ -371,7 +389,6 @@ async fn main() -> anyhow::Result<()> {
     let system_prompt = system_parts.join("\n\n");
 
     // Determine mode early (needed for auth error handling and permission handler selection).
-    let is_headless = cli.print || cli.prompt.is_some();
 
     // Initialize API client.
     // Try config/env first; fall back to saved OAuth tokens; finally prompt for login.
@@ -400,8 +417,7 @@ async fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
     let client = Arc::new(
-        cc_api::AnthropicClient::new(client_config)
-            .context("Failed to create API client")?,
+        cc_api::AnthropicClient::new(client_config).context("Failed to create API client")?,
     );
 
     let bridge_config = resolve_bridge_config(&settings, &api_key, use_bearer_auth, is_headless);
@@ -431,7 +447,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize MCP servers first (needed for ToolContext.mcp_manager).
     let mcp_manager_arc: Option<Arc<cc_mcp::McpManager>> = if !config.mcp_servers.is_empty() {
-        info!(count = config.mcp_servers.len(), "Connecting to MCP servers");
+        info!(
+            count = config.mcp_servers.len(),
+            "Connecting to MCP servers"
+        );
         let mcp_manager = cc_mcp::McpManager::connect_all(&config.mcp_servers).await;
         if mcp_manager.server_count() > 0 {
             Some(Arc::new(mcp_manager))
@@ -495,11 +514,8 @@ async fn main() -> anyhow::Result<()> {
 
         // Register plugin MCP servers into the in-memory config so they are
         // picked up by any subsequent MCP manager construction.
-        let existing_names: std::collections::HashSet<String> = config
-            .mcp_servers
-            .iter()
-            .map(|s| s.name.clone())
-            .collect();
+        let existing_names: std::collections::HashSet<String> =
+            config.mcp_servers.iter().map(|s| s.name.clone()).collect();
         for mcp_server in plugin_registry.all_mcp_servers() {
             if !existing_names.contains(&mcp_server.name) {
                 config.mcp_servers.push(mcp_server);
@@ -534,15 +550,7 @@ async fn main() -> anyhow::Result<()> {
 
     // --print mode (headless)
     let result = if is_headless {
-        run_headless(
-            &cli,
-            client,
-            tools,
-            tool_ctx,
-            query_config,
-            cost_tracker,
-        )
-        .await
+        run_headless(&cli, client, tools, tool_ctx, query_config, cost_tracker).await
     } else {
         run_interactive(
             config,
@@ -578,7 +586,7 @@ async fn run_headless(
     use tokio_util::sync::CancellationToken;
 
     // Read prompt from positional arg or stdin
-    let prompt = if let Some(ref p) = cli.prompt {
+    let mut prompt = if let Some(ref p) = cli.prompt {
         p.clone()
     } else {
         // Read from stdin
@@ -589,12 +597,15 @@ async fn run_headless(
         buf.trim().to_string()
     };
 
-    if prompt.is_empty() {
+    if prompt.trim().is_empty() {
         eprintln!("Error: No prompt provided. Use --print <prompt> or pipe text to stdin.");
         std::process::exit(1);
     }
 
-    let is_json_output = matches!(cli.output_format, CliOutputFormat::Json | CliOutputFormat::StreamJson);
+    let is_json_output = matches!(
+        cli.output_format,
+        CliOutputFormat::Json | CliOutputFormat::StreamJson
+    );
     let is_stream_json = matches!(cli.output_format, CliOutputFormat::StreamJson);
 
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<QueryEvent>();
@@ -617,10 +628,10 @@ async fn run_headless(
         )
         .await;
         if cli.include_hook_events && is_stream_json {
-            let (outcome, details) = match hook_outcome {
+            let (outcome, details) = match &hook_outcome {
                 cc_core::hooks::HookOutcome::Allowed => ("allowed", None),
-                cc_core::hooks::HookOutcome::Blocked(reason) => ("blocked", Some(reason)),
-                cc_core::hooks::HookOutcome::Modified(output) => ("modified", Some(output)),
+                cc_core::hooks::HookOutcome::Blocked(reason) => ("blocked", Some(reason.clone())),
+                cc_core::hooks::HookOutcome::Modified(output) => ("modified", Some(output.clone())),
             };
             let ev = serde_json::json!({
                 "type": "hook_event",
@@ -630,6 +641,11 @@ async fn run_headless(
             });
             println!("{}", ev);
         }
+        prompt = apply_user_prompt_submit_hook(prompt, hook_outcome)?;
+    }
+
+    if prompt.trim().is_empty() {
+        anyhow::bail!("Prompt is empty after hook processing.");
     }
 
     // Spawn the query loop in a background task so we can drain events concurrently
@@ -715,41 +731,42 @@ async fn run_headless(
     }
 
     // Wait for the query task to finish and get the final outcome
-    let outcome = query_handle.await.unwrap_or(QueryOutcome::Error(
-        cc_core::error::ClaudeError::Other("Query task panicked".to_string()),
-    ));
+    let outcome =
+        query_handle
+            .await
+            .unwrap_or(QueryOutcome::Error(cc_core::error::ClaudeError::Other(
+                "Query task panicked".to_string(),
+            )));
 
     // Final output
     match cli.output_format {
-        CliOutputFormat::Json => {
-            match outcome {
-                QueryOutcome::EndTurn { message, usage } => {
-                    let result_text = if full_text.is_empty() {
-                        message.get_all_text()
-                    } else {
-                        full_text
-                    };
-                    let out = serde_json::json!({
-                        "type": "result",
-                        "result": result_text,
-                        "usage": {
-                            "input_tokens": usage.input_tokens,
-                            "output_tokens": usage.output_tokens,
-                            "cache_creation_input_tokens": usage.cache_creation_input_tokens,
-                            "cache_read_input_tokens": usage.cache_read_input_tokens,
-                        },
-                        "cost_usd": cost_tracker.total_cost_usd(),
-                    });
-                    println!("{}", out);
-                }
-                QueryOutcome::Error(e) => {
-                    let out = serde_json::json!({ "type": "error", "error": e.to_string() });
-                    eprintln!("{}", out);
-                    std::process::exit(1);
-                }
-                _ => {}
+        CliOutputFormat::Json => match outcome {
+            QueryOutcome::EndTurn { message, usage } => {
+                let result_text = if full_text.is_empty() {
+                    message.get_all_text()
+                } else {
+                    full_text
+                };
+                let out = serde_json::json!({
+                    "type": "result",
+                    "result": result_text,
+                    "usage": {
+                        "input_tokens": usage.input_tokens,
+                        "output_tokens": usage.output_tokens,
+                        "cache_creation_input_tokens": usage.cache_creation_input_tokens,
+                        "cache_read_input_tokens": usage.cache_read_input_tokens,
+                    },
+                    "cost_usd": cost_tracker.total_cost_usd(),
+                });
+                println!("{}", out);
             }
-        }
+            QueryOutcome::Error(e) => {
+                let out = serde_json::json!({ "type": "error", "error": e.to_string() });
+                eprintln!("{}", out);
+                std::process::exit(1);
+            }
+            _ => {}
+        },
         CliOutputFormat::StreamJson => {
             // Already streamed above; emit final result event
             match outcome {
@@ -807,12 +824,12 @@ async fn run_interactive(
     resume_id: Option<String>,
     bridge_config: Option<cc_bridge::BridgeConfig>,
 ) -> anyhow::Result<()> {
-    use cc_commands::{execute_command, CommandContext, CommandResult};
     use cc_bridge::{BridgeOutbound, TuiBridgeEvent};
+    use cc_commands::{execute_command, CommandContext, CommandResult};
     use cc_query::{QueryEvent, QueryOutcome};
     use cc_tui::{
-        bridge_state::BridgeConnectionState, notifications::NotificationKind,
-        render::render_app, restore_terminal, setup_terminal, App,
+        bridge_state::BridgeConnectionState, notifications::NotificationKind, render::render_app,
+        restore_terminal, setup_terminal, App,
     };
     use crossterm::event::{self, Event, KeyCode};
     use std::time::Duration;
@@ -835,8 +852,9 @@ async fn run_interactive(
             }
             Err(e) => {
                 eprintln!("Warning: could not load session {}: {}", id, e);
-                let mut session =
-                    cc_core::history::ConversationSession::new(config.effective_model().to_string());
+                let mut session = cc_core::history::ConversationSession::new(
+                    config.effective_model().to_string(),
+                );
                 session.id = tool_ctx.session_id.clone();
                 session.working_dir = Some(tool_ctx.working_dir.display().to_string());
                 session
@@ -882,7 +900,8 @@ async fn run_interactive(
 
         let cancel_clone = bridge_cancel.clone();
         tokio::spawn(async move {
-            if let Err(e) = cc_bridge::run_bridge_loop(cfg, tui_tx, outbound_rx, cancel_clone).await {
+            if let Err(e) = cc_bridge::run_bridge_loop(cfg, tui_tx, outbound_rx, cancel_clone).await
+            {
                 warn!("Bridge loop exited with error: {}", e);
             }
         });
@@ -926,7 +945,9 @@ async fn run_interactive(
                 Event::Key(key) => {
                     // Ctrl+C while streaming => cancel
                     if key.code == KeyCode::Char('c')
-                        && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL)
+                        && key
+                            .modifiers
+                            .contains(crossterm::event::KeyModifiers::CONTROL)
                     {
                         if app.is_streaming {
                             if let Some(ref ct) = cancel {
@@ -942,7 +963,9 @@ async fn run_interactive(
 
                     // Ctrl+D on empty input => quit
                     if key.code == KeyCode::Char('d')
-                        && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL)
+                        && key
+                            .modifiers
+                            .contains(crossterm::event::KeyModifiers::CONTROL)
                         && app.input.is_empty()
                     {
                         break 'main;
@@ -965,8 +988,7 @@ async fn run_interactive(
                                     app.messages.clear();
                                     session.messages.clear();
                                     session.updated_at = chrono::Utc::now();
-                                    app.status_message =
-                                        Some("Conversation cleared.".to_string());
+                                    app.status_message = Some("Conversation cleared.".to_string());
                                 }
                                 Some(CommandResult::SetMessages(new_msgs)) => {
                                     let removed = messages.len().saturating_sub(new_msgs.len());
@@ -996,10 +1018,8 @@ async fn run_interactive(
                                             cmd_ctx.working_dir = saved_path;
                                         }
                                     }
-                                    app.status_message = Some(format!(
-                                        "Resumed session {}.",
-                                        &session.id[..8]
-                                    ));
+                                    app.status_message =
+                                        Some(format!("Resumed session {}.", &session.id[..8]));
                                 }
                                 Some(CommandResult::RenameSession(title)) => {
                                     session.title = Some(title.clone());
@@ -1010,14 +1030,12 @@ async fn run_interactive(
                                         Some(format!("Session renamed to \"{}\".", title));
                                 }
                                 Some(CommandResult::Message(msg)) => {
-                                    app.messages
-                                        .push(cc_core::types::Message::assistant(msg));
+                                    app.messages.push(cc_core::types::Message::assistant(msg));
                                 }
                                 Some(CommandResult::ConfigChange(new_cfg)) => {
                                     cmd_ctx.config = new_cfg.clone();
                                     app.config = new_cfg;
-                                    app.status_message =
-                                        Some("Configuration updated.".to_string());
+                                    app.status_message = Some("Configuration updated.".to_string());
                                 }
                                 Some(CommandResult::ConfigChangeMessage(new_cfg, msg)) => {
                                     cmd_ctx.config = new_cfg.clone();
@@ -1027,8 +1045,7 @@ async fn run_interactive(
                                 Some(CommandResult::UserMessage(msg)) => {
                                     // Inject as user turn
                                     messages.push(cc_core::types::Message::user(msg.clone()));
-                                    app.messages
-                                        .push(cc_core::types::Message::user(msg));
+                                    app.messages.push(cc_core::types::Message::user(msg));
                                     // Fall through to send to model
                                 }
                                 Some(CommandResult::StartOAuthFlow(with_claude_ai)) => {
@@ -1061,29 +1078,45 @@ async fn run_interactive(
                             continue;
                         }
 
-                        // Fire UserPromptSubmit hook (non-blocking)
+                        let mut submitted_input = input.clone();
+
+                        // Fire UserPromptSubmit hook before the turn is queued.
                         if !config.hooks.is_empty() {
                             let hook_ctx = cc_core::hooks::HookContext {
                                 event: "UserPromptSubmit".to_string(),
                                 tool_name: None,
                                 tool_input: None,
-                                tool_output: Some(input.clone()),
+                                tool_output: Some(submitted_input.clone()),
                                 is_error: None,
                                 session_id: Some(tool_ctx.session_id.clone()),
                             };
-                            cc_core::hooks::run_hooks(
+                            let hook_outcome = cc_core::hooks::run_hooks(
                                 &config.hooks,
                                 cc_core::config::HookEvent::UserPromptSubmit,
                                 &hook_ctx,
                                 &tool_ctx.working_dir,
                             )
                             .await;
+                            match apply_user_prompt_submit_hook(submitted_input, hook_outcome) {
+                                Ok(next_input) => submitted_input = next_input,
+                                Err(err) => {
+                                    app.status_message =
+                                        Some(format!("Prompt blocked by hook: {}", err));
+                                    continue;
+                                }
+                            }
+                        }
+
+                        if submitted_input.trim().is_empty() {
+                            app.status_message =
+                                Some("Prompt is empty after hook processing.".to_string());
+                            continue;
                         }
 
                         // Regular user message
-                        messages.push(cc_core::types::Message::user(input.clone()));
+                        messages.push(cc_core::types::Message::user(submitted_input.clone()));
                         app.messages
-                            .push(cc_core::types::Message::user(input.clone()));
+                            .push(cc_core::types::Message::user(submitted_input.clone()));
                         session.messages = messages.clone();
                         session.updated_at = chrono::Utc::now();
 
@@ -1165,13 +1198,16 @@ async fn run_interactive(
                             input_preview: None,
                         })
                     }
-                    QueryEvent::ToolEnd { tool_id, result, is_error, .. } => {
-                        Some(BridgeOutbound::ToolEnd {
-                            id: tool_id.clone(),
-                            output: result.clone(),
-                            is_error: *is_error,
-                        })
-                    }
+                    QueryEvent::ToolEnd {
+                        tool_id,
+                        result,
+                        is_error,
+                        ..
+                    } => Some(BridgeOutbound::ToolEnd {
+                        id: tool_id.clone(),
+                        output: result.clone(),
+                        is_error: *is_error,
+                    }),
                     QueryEvent::TurnComplete { stop_reason, turn } => {
                         Some(BridgeOutbound::TurnComplete {
                             message_id: format!("turn-{}", turn),
@@ -1195,7 +1231,10 @@ async fn run_interactive(
         if let Some(runtime) = bridge_runtime.as_mut() {
             loop {
                 match runtime.tui_rx.try_recv() {
-                    Ok(TuiBridgeEvent::Connected { session_url, session_id: _ }) => {
+                    Ok(TuiBridgeEvent::Connected {
+                        session_url,
+                        session_id: _,
+                    }) => {
                         let short = if session_url.len() > 60 {
                             format!("{}…", &session_url[..60])
                         } else {
@@ -1239,7 +1278,8 @@ async fn run_interactive(
                         app.cursor_pos = app.input.len();
                         // Push as a user message and fire a query immediately.
                         messages.push(cc_core::types::Message::user(content.clone()));
-                        app.messages.push(cc_core::types::Message::user(content.clone()));
+                        app.messages
+                            .push(cc_core::types::Message::user(content.clone()));
                         session.messages = messages.clone();
                         session.updated_at = chrono::Utc::now();
                         app.is_streaming = true;
@@ -1280,18 +1320,21 @@ async fn run_interactive(
                                 ct.cancel();
                             }
                             app.is_streaming = false;
-                            app.status_message =
-                                Some("Cancelled by remote control.".to_string());
+                            app.status_message = Some("Cancelled by remote control.".to_string());
                         }
                     }
-                    Ok(TuiBridgeEvent::PermissionResponse { tool_use_id, response }) => {
+                    Ok(TuiBridgeEvent::PermissionResponse {
+                        tool_use_id,
+                        response,
+                    }) => {
                         // Resolve a pending permission dialog if IDs match.
                         if let Some(ref pr) = app.permission_request {
                             if pr.tool_use_id == tool_use_id {
                                 use cc_bridge::PermissionResponseKind;
                                 let _allow = matches!(
                                     response,
-                                    PermissionResponseKind::Allow | PermissionResponseKind::AllowSession
+                                    PermissionResponseKind::Allow
+                                        | PermissionResponseKind::AllowSession
                                 );
                                 app.permission_request = None;
                             }
@@ -1425,7 +1468,9 @@ async fn handle_auth_command(args: &[String]) -> anyhow::Result<()> {
             eprintln!("Unknown auth subcommand: '{}'", unknown);
             eprintln!();
             eprintln!("Usage: claude auth <subcommand>");
-            eprintln!("  login [--console]   Authenticate (claude.ai by default; --console for API key)");
+            eprintln!(
+                "  login [--console]   Authenticate (claude.ai by default; --console for API key)"
+            );
             eprintln!("  logout              Remove stored credentials");
             eprintln!("  status [--json]     Show authentication status");
             std::process::exit(1);
@@ -1446,7 +1491,9 @@ async fn handle_auth_command(args: &[String]) -> anyhow::Result<()> {
 /// Print current auth status, then exit with code 0 (logged in) or 1 (not logged in).
 async fn auth_status(json_output: bool) {
     // Gather auth state
-    let env_api_key = std::env::var("ANTHROPIC_API_KEY").ok().filter(|k| !k.is_empty());
+    let env_api_key = std::env::var("ANTHROPIC_API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty());
     let settings = Settings::load().await.unwrap_or_default();
     let settings_api_key = settings.config.api_key.clone().filter(|k| !k.is_empty());
     let oauth_tokens = cc_core::oauth::OAuthTokens::load().await;
@@ -1454,7 +1501,11 @@ async fn auth_status(json_output: bool) {
     // Determine auth method (mirrors TypeScript authStatus())
     let (auth_method, logged_in) = if let Some(ref tokens) = oauth_tokens {
         let uses_bearer = tokens.uses_bearer_auth();
-        let method = if uses_bearer { "claude.ai" } else { "oauth_token" };
+        let method = if uses_bearer {
+            "claude.ai"
+        } else {
+            "oauth_token"
+        };
         (method.to_string(), true)
     } else if env_api_key.is_some() {
         ("api_key".to_string(), true)
@@ -1570,5 +1621,43 @@ fn json_null_or_string(opt: &Option<String>) -> serde_json::Value {
     match opt {
         Some(s) => serde_json::Value::String(s.clone()),
         None => serde_json::Value::Null,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_user_prompt_submit_hook;
+
+    #[test]
+    fn prompt_hook_allows_original_prompt() {
+        let result = apply_user_prompt_submit_hook(
+            "hello".to_string(),
+            cc_core::hooks::HookOutcome::Allowed,
+        )
+        .expect("allowed hook should keep the prompt");
+
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn prompt_hook_uses_modified_prompt() {
+        let result = apply_user_prompt_submit_hook(
+            "hello".to_string(),
+            cc_core::hooks::HookOutcome::Modified("rewritten".to_string()),
+        )
+        .expect("modified hook should replace the prompt");
+
+        assert_eq!(result, "rewritten");
+    }
+
+    #[test]
+    fn prompt_hook_blocks_submission() {
+        let err = apply_user_prompt_submit_hook(
+            "hello".to_string(),
+            cc_core::hooks::HookOutcome::Blocked("nope".to_string()),
+        )
+        .expect_err("blocked hook should fail");
+
+        assert!(err.to_string().contains("nope"));
     }
 }
