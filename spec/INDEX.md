@@ -1,7 +1,7 @@
 # Claude Code — Spec Index
 
 > Quick-reference index across all spec documents.
-> Total spec coverage: ~1.0 MB across 16 markdown files.
+> Total spec coverage: ~1.0 MB across 17 markdown files.
 
 ---
 
@@ -24,6 +24,7 @@
 | 12 | [12_constants_types.md](12_constants_types.md) | 83 KB | Every constant, type, OAuth config, system prompts, tool limits, beta headers |
 | 13 | [13_rust_codebase.md](13_rust_codebase.md) | 63 KB | Complete Rust rewrite: all 9 crates, 33 tools, query loop, TUI, bridge |
 | 14 | [14_local_binary_diff.md](14_local_binary_diff.md) | 8 KB | Local binary diff across 2.1.87/2.1.88/2.1.89, source-map markers, and Rust parity notes |
+| 15 | [15_map_parity_audit.md](15_map_parity_audit.md) | 9 KB | Clean-room parity matrix from map-derived artifacts to current Rust implementation |
 
 ---
 
@@ -93,6 +94,7 @@
 | Rust bridge | 13 | §cc-bridge |
 | Local binary diff (2.1.87 / 2.1.88 / 2.1.89) | 14 | §High-Signal Findings |
 | Rust parity follow-ups from local binaries | 14 | §Rust Port Parity Notes |
+| Map-derived parity audit | 15 | §Parity Matrix |
 
 ---
 
