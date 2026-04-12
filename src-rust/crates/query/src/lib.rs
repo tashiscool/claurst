@@ -112,6 +112,13 @@ pub enum QueryEvent {
     TurnComplete { turn: u32, stop_reason: String },
     /// An informational status message.
     Status(String),
+    /// A hook lifecycle event.
+    Hook {
+        event_name: String,
+        tool_name: Option<String>,
+        outcome: String,
+        details: Option<String>,
+    },
     /// An error.
     Error(String),
 }
@@ -285,13 +292,16 @@ pub async fn run_query_loop(
                     is_error: None,
                     session_id: Some(tool_ctx.session_id.clone()),
                 };
-                cc_core::hooks::run_hooks(
+                let hook_outcome = cc_core::hooks::run_hooks(
                     &tool_ctx.config.hooks,
                     cc_core::config::HookEvent::Stop,
                     &stop_ctx,
                     &tool_ctx.working_dir,
                 )
                 .await;
+                if let Some(ref tx) = event_tx {
+                    let _ = tx.send(hook_query_event("Stop", None, &hook_outcome));
+                }
             }};
         }
 
@@ -348,6 +358,13 @@ pub async fn run_query_loop(
                             &tool_ctx.working_dir,
                         )
                         .await;
+                        if let Some(ref tx) = event_tx {
+                            let _ = tx.send(hook_query_event(
+                                "PreToolUse",
+                                Some(name.clone()),
+                                &pre_outcome,
+                            ));
+                        }
 
                         let result = if let cc_core::hooks::HookOutcome::Blocked(reason) = pre_outcome {
                             warn!(tool = name, reason = %reason, "PreToolUse hook blocked execution");
@@ -365,13 +382,20 @@ pub async fn run_query_loop(
                             is_error: Some(result.is_error),
                             session_id: Some(tool_ctx.session_id.clone()),
                         };
-                        cc_core::hooks::run_hooks(
+                        let post_outcome = cc_core::hooks::run_hooks(
                             hooks,
                             cc_core::config::HookEvent::PostToolUse,
                             &post_ctx,
                             &tool_ctx.working_dir,
                         )
                         .await;
+                        if let Some(ref tx) = event_tx {
+                            let _ = tx.send(hook_query_event(
+                                "PostToolUse",
+                                Some(name.clone()),
+                                &post_outcome,
+                            ));
+                        }
 
                         if let Some(ref tx) = event_tx {
                             let _ = tx.send(QueryEvent::ToolEnd {
@@ -412,6 +436,29 @@ pub async fn run_query_loop(
                 };
             }
         }
+    }
+}
+
+fn hook_query_event(
+    event_name: &str,
+    tool_name: Option<String>,
+    outcome: &cc_core::hooks::HookOutcome,
+) -> QueryEvent {
+    let (outcome_name, details) = match outcome {
+        cc_core::hooks::HookOutcome::Allowed => ("allowed".to_string(), None),
+        cc_core::hooks::HookOutcome::Blocked(reason) => {
+            ("blocked".to_string(), Some(reason.clone()))
+        }
+        cc_core::hooks::HookOutcome::Modified(output) => {
+            ("modified".to_string(), Some(output.clone()))
+        }
+    };
+
+    QueryEvent::Hook {
+        event_name: event_name.to_string(),
+        tool_name,
+        outcome: outcome_name,
+        details,
     }
 }
 
